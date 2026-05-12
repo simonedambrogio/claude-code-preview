@@ -1,0 +1,37 @@
+{
+  "name": "claude-code-preview",
+  "displayName": "Claude Code Preview",
+  "description": "Render Claude Code's latest response as a markdown preview (math, code, formatting).",
+  "version": "0.3.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeCodePreview.open",
+        "title": "Claude Code Preview: Open Latest Response to the Side"
+      },
+      {
+        "command": "claudeCodePreview.openCurrent",
+        "title": "Claude Code Preview: Open Latest Response"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claudeCodePreview.open",
+        "key": "cmd+k v",
+        "when": "terminalFocus"
+      },
+      {
+        "command": "claudeCodePreview.openCurrent",
+        "key": "cmd+shift+v",
+        "when": "terminalFocus"
+      }
+    ]
+  }
+}
