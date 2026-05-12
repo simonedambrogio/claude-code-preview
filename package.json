@@ -1,13 +1,39 @@
 {
   "name": "claude-code-preview",
   "displayName": "Claude Code Preview",
-  "description": "Render Claude Code's latest response as a markdown preview (math, code, formatting).",
+  "description": "Render Claude Code responses with LaTeX math, code highlighting, and markdown formatting in VS Code's markdown preview.",
   "version": "0.3.0",
-  "publisher": "local",
+  "publisher": "simonedambrogio",
+  "author": {
+    "name": "Simone D'Ambrogio"
+  },
+  "license": "MIT",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.80.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "anthropic",
+    "markdown",
+    "preview",
+    "latex",
+    "math",
+    "katex"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simonedambrogio/claude-code-preview.git"
+  },
+  "bugs": {
+    "url": "https://github.com/simonedambrogio/claude-code-preview/issues"
+  },
+  "homepage": "https://github.com/simonedambrogio/claude-code-preview#readme",
   "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
