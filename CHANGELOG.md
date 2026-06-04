@@ -1,5 +1,19 @@
 # Change Log
 
+## 0.3.3 — 2026-05-12
+
+- Extract the latest response from the focused session's transcript on demand when the preview is opened. Fixes two cases that previously fell through to another session's content: resuming an existing session before sending a new message, and opening the preview from a freshly-started session.
+- When a session is identified but has no responses yet, show an explicit "no responses yet" message instead of falling back to the most recently updated `.md` from a different session.
+- Refactor `extension.js` into clearly-grouped sections (extraction, storage, session resolution, preview resolution, commands) for readability.
+
+## 0.3.2 — 2026-05-12
+
+- Prefix the written markdown with a no-op HTML comment so responses that begin with `---` (horizontal rule) aren't mis-parsed as YAML frontmatter, which previously rendered the preview blank.
+
+## 0.3.1 — 2026-05-12
+
+- Force the markdown preview to refresh after writing a new response and after focusing an already-open preview. VS Code's built-in preview watcher misses external writes to paths outside the workspace, so the preview could keep rendering a stale response.
+
 ## 0.3.0 — 2026-05-11
 
 Initial public release.

@@ -4,10 +4,17 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
+// ---- Paths & constants ----
+
 const TRANSCRIPTS_ROOT = path.join(os.homedir(), '.claude', 'projects');
 const CLAUDE_SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const DEBOUNCE_MS = 500;
 const PRUNE_DAYS = 30;
+
+// Prevents a leading `---` in a response (horizontal rule) from being parsed
+// as the opening fence of YAML frontmatter, which would render the preview
+// blank.
+const MD_PREFIX = '<!-- claude-code-preview -->\n\n';
 
 let storageDir = null;
 let outputChannel = null;
@@ -16,6 +23,12 @@ const debouncers = new Map();
 function log(msg) {
   if (outputChannel) outputChannel.appendLine(`[${new Date().toISOString()}] ${msg}`);
 }
+
+function mdPathForSession(sessionId) {
+  return path.join(storageDir, `${sessionId}.md`);
+}
+
+// ---- Transcript → markdown extraction ----
 
 function extractLastResponse(transcriptPath) {
   let content;
@@ -32,10 +45,12 @@ function extractLastResponse(transcriptPath) {
     try {
       entries.push(JSON.parse(line));
     } catch {
-      // Partial or malformed line during streaming — skip.
+      // Partial / malformed line during streaming — skip.
     }
   }
 
+  // Walk backwards to find the latest "real" user turn — a string prompt, or
+  // array content with at least one block that isn't a tool_result.
   let lastUserIdx = -1;
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
@@ -61,20 +76,24 @@ function extractLastResponse(transcriptPath) {
     }
   }
 
-  if (texts.length === 0) return null;
-  return texts.join('\n\n');
+  return texts.length ? texts.join('\n\n') : null;
 }
 
 function writeExtractedResponse(transcriptPath) {
   const text = extractLastResponse(transcriptPath);
-  if (!text) return;
+  if (!text) return false;
   const sessionId = path.basename(transcriptPath, '.jsonl');
-  const outPath = path.join(storageDir, `${sessionId}.md`);
+  const outPath = mdPathForSession(sessionId);
   try {
-    fs.writeFileSync(outPath, text + '\n');
+    fs.writeFileSync(outPath, MD_PREFIX + text + '\n');
   } catch (err) {
     log(`write failed ${outPath}: ${err.message}`);
+    return false;
   }
+  // VS Code's preview watcher misses external writes to paths outside the
+  // workspace, so nudge it to re-render.
+  vscode.commands.executeCommand('markdown.preview.refresh').then(undefined, () => {});
+  return true;
 }
 
 function scheduleExtraction(transcriptPath) {
@@ -86,6 +105,8 @@ function scheduleExtraction(transcriptPath) {
   }, DEBOUNCE_MS);
   debouncers.set(transcriptPath, timer);
 }
+
+// ---- Storage maintenance ----
 
 function pruneOldResponses() {
   let entries;
@@ -103,6 +124,26 @@ function pruneOldResponses() {
     } catch {}
   }
 }
+
+function mostRecentMdPath() {
+  let entries;
+  try {
+    entries = fs.readdirSync(storageDir);
+  } catch {
+    return null;
+  }
+  let best = null;
+  for (const f of entries) {
+    if (!f.endsWith('.md')) continue;
+    const full = path.join(storageDir, f);
+    let mtime;
+    try { mtime = fs.statSync(full).mtimeMs; } catch { continue; }
+    if (!best || mtime > best.mtime) best = { full, mtime };
+  }
+  return best ? best.full : null;
+}
+
+// ---- Session resolution (focused terminal → sessionId → transcript) ----
 
 function walkDescendantPids(rootPid) {
   const result = [];
@@ -147,37 +188,85 @@ function sessionIdForShellPid(shellPid) {
   return null;
 }
 
-async function resolveTargetMarkdown() {
+async function activeSessionId() {
   const terminal = vscode.window.activeTerminal;
-  if (terminal) {
-    let shellPid;
-    try { shellPid = await terminal.processId; } catch {}
-    if (shellPid) {
-      const sessionId = sessionIdForShellPid(shellPid);
-      if (sessionId) {
-        const candidate = path.join(storageDir, `${sessionId}.md`);
-        if (fs.existsSync(candidate)) return candidate;
-        log(`precise: session ${sessionId} resolved but no .md written yet`);
-      }
-    }
-  }
+  if (!terminal) return null;
+  let shellPid;
+  try { shellPid = await terminal.processId; } catch { return null; }
+  if (!shellPid) return null;
+  return sessionIdForShellPid(shellPid);
+}
 
-  let entries;
+function findTranscriptForSession(sessionId) {
+  let projects;
   try {
-    entries = fs.readdirSync(storageDir);
+    projects = fs.readdirSync(TRANSCRIPTS_ROOT);
   } catch {
     return null;
   }
-  const candidates = entries
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => {
-      const full = path.join(storageDir, f);
-      try { return { full, mtime: fs.statSync(full).mtimeMs }; } catch { return null; }
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.mtime - a.mtime);
-  return candidates.length ? candidates[0].full : null;
+  for (const proj of projects) {
+    const candidate = path.join(TRANSCRIPTS_ROOT, proj, `${sessionId}.jsonl`);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
 }
+
+// ---- Preview target resolution ----
+//
+// Returns one of:
+//   { kind: 'file', path }        — open this .md
+//   { kind: 'empty', sessionId }  — focused terminal has a claude session
+//                                   with no responses yet; do NOT fall back
+//                                   to another session's .md
+//   { kind: 'none' }              — no claude session in focus and no .md
+//                                   files anywhere
+//
+// When a session is in focus we always do a fresh extraction from its
+// transcript, which covers the resumed/cold-start case where the file
+// watcher hasn't yet seen a change but prior responses live on disk.
+
+async function resolvePreview() {
+  const sessionId = await activeSessionId();
+  if (sessionId) {
+    const transcript = findTranscriptForSession(sessionId);
+    if (transcript) writeExtractedResponse(transcript);
+
+    const mdPath = mdPathForSession(sessionId);
+    if (fs.existsSync(mdPath)) return { kind: 'file', path: mdPath };
+    return { kind: 'empty', sessionId };
+  }
+
+  const recent = mostRecentMdPath();
+  return recent ? { kind: 'file', path: recent } : { kind: 'none' };
+}
+
+// ---- Commands ----
+
+async function openPreview(toSide) {
+  const result = await resolvePreview();
+
+  if (result.kind === 'empty') {
+    vscode.window.showInformationMessage(
+      'Claude Code Preview: this Claude session has no responses yet.'
+    );
+    return;
+  }
+  if (result.kind === 'none') {
+    vscode.window.showInformationMessage(
+      'Claude Code Preview: no response files yet. Send a message in your Claude Code terminal and try again.'
+    );
+    return;
+  }
+
+  const uri = vscode.Uri.file(result.path);
+  const cmd = toSide ? 'markdown.showPreviewToSide' : 'markdown.showPreview';
+  await vscode.commands.executeCommand(cmd, uri);
+  // Focusing an already-open preview doesn't re-render — force it, in case
+  // the .md changed since the last render and the watcher missed it.
+  try { await vscode.commands.executeCommand('markdown.preview.refresh'); } catch {}
+}
+
+// ---- Activation ----
 
 function activate(context) {
   outputChannel = vscode.window.createOutputChannel('Claude Code Preview');
@@ -204,22 +293,9 @@ function activate(context) {
     log(`transcripts dir not found: ${TRANSCRIPTS_ROOT}`);
   }
 
-  const open = async (toSide) => {
-    const target = await resolveTargetMarkdown();
-    if (!target) {
-      vscode.window.showInformationMessage(
-        'Claude Code Preview: no response files yet. Send a message in your Claude Code terminal and try again.'
-      );
-      return;
-    }
-    const uri = vscode.Uri.file(target);
-    const cmd = toSide ? 'markdown.showPreviewToSide' : 'markdown.showPreview';
-    await vscode.commands.executeCommand(cmd, uri);
-  };
-
   context.subscriptions.push(
-    vscode.commands.registerCommand('claudeCodePreview.open', () => open(true)),
-    vscode.commands.registerCommand('claudeCodePreview.openCurrent', () => open(false))
+    vscode.commands.registerCommand('claudeCodePreview.open', () => openPreview(true)),
+    vscode.commands.registerCommand('claudeCodePreview.openCurrent', () => openPreview(false))
   );
 }
 

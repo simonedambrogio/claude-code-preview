@@ -2,7 +2,7 @@
   "name": "claude-code-preview",
   "displayName": "Claude Code Preview",
   "description": "Render Claude Code responses with LaTeX math, code highlighting, and markdown formatting in VS Code's markdown preview.",
-  "version": "0.3.0",
+  "version": "0.3.3",
   "publisher": "simonedambrogio",
   "author": {
     "name": "Simone D'Ambrogio"
