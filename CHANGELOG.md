@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.3.4 — 2026-06-04
+
+- Fix keybindings on Windows/Linux: `Ctrl+K V` and `Ctrl+Shift+V` (previously bound to `cmd`, which maps to the Win/Meta key outside macOS).
+- README revamp: animated demo GIF, quick-start section, and a keybindings table.
+
 ## 0.3.3 — 2026-05-12
 
 - Extract the latest response from the focused session's transcript on demand when the preview is opened. Fixes two cases that previously fell through to another session's content: resuming an existing session before sending a new message, and opening the preview from a freshly-started session.

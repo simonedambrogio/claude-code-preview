@@ -1,33 +1,44 @@
-# Claude Code Preview
+<h1 align="center">Claude Code Preview</h1>
 
-Render [Claude Code](https://docs.claude.com/claude-code) responses with proper LaTeX math, code highlighting, and markdown formatting — directly from VS Code's integrated terminal.
+<p align="center">
+  Render <a href="https://docs.claude.com/claude-code">Claude Code</a> responses with LaTeX math, code highlighting, and markdown formatting — straight from VS Code's integrated terminal.
+</p>
 
-When you press `Cmd+K V` (or `Ctrl+K V` on Linux/Windows) in a terminal running `claude`, the latest response opens as a markdown preview beside the terminal. The preview auto-refreshes after every new response.
+<p align="center">
+  <img src="assets/demo.gif" alt="Claude Code Preview demo — press Cmd+K V in a terminal running claude and the latest response opens as a rendered markdown preview, math and all" />
+</p>
 
-## Features
+Claude Code answers in markdown, but the terminal shows it as plain text: `$$\nabla_\theta J(\theta)$$` stays raw LaTeX, code blocks lose their highlighting, and copying a formula means untangling line-wrapped source. This extension turns the latest response into a live markdown preview — one keystroke, no setup.
 
-- **No setup.** Install the extension and it just works alongside Claude Code. No shell hooks, no config files to edit.
-- **Math rendering.** Inline `$...$` and display `$$...$$` LaTeX expressions render via VS Code's built-in KaTeX support.
-- **Per-session previews.** The extension finds *which* session belongs to the focused terminal by walking its process tree. Parallel sessions in the same project show their own previews — no collisions.
-- **Two open modes.** Open to the side (`Cmd+K V`) or in the current pane (`Cmd+Shift+V`), mirroring the built-in markdown preview keybindings.
-
-## Requirements
-
-- [Claude Code](https://docs.claude.com/claude-code) installed and used in a terminal (any terminal — VS Code's integrated terminal works best).
-- macOS or Linux for precise per-session resolution. Windows users get the most-recently-updated session as a fallback.
-
-## Usage
+## Quick start
 
 1. Open a terminal in VS Code and run `claude`.
 2. Send a message.
 3. Press `Cmd+K V` with the terminal focused.
 
-The preview opens beside the terminal. Each subsequent response updates it automatically.
+That's it. The preview opens beside the terminal and auto-refreshes after every new response.
 
-The commands are also available in the Command Palette:
+## Keybindings
 
-- **Claude Code Preview: Open Latest Response to the Side**
-- **Claude Code Preview: Open Latest Response**
+| macOS | Windows / Linux | Command |
+| --- | --- | --- |
+| `Cmd+K V` | `Ctrl+K V` | **Open Latest Response to the Side** |
+| `Cmd+Shift+V` | `Ctrl+Shift+V` | **Open Latest Response** (current pane) |
+
+Both shortcuts are active when a terminal is focused, mirroring VS Code's built-in markdown preview keys. The commands are also available from the Command Palette.
+
+## Features
+
+- **No setup.** Install the extension and it just works alongside Claude Code. No shell hooks, no config files to edit.
+- **Math rendering.** Inline `$...$` and display `$$...$$` LaTeX expressions render via VS Code's built-in KaTeX support.
+- **Auto-refresh.** The preview updates itself after every new response — open it once and keep chatting.
+- **Per-session previews.** The extension finds *which* session belongs to the focused terminal by walking its process tree. Parallel sessions in the same project show their own previews — no collisions.
+- **Easy copying.** Select rendered text from the preview instead of fighting line-wrapped terminal output.
+
+## Requirements
+
+- [Claude Code](https://docs.claude.com/claude-code) installed and used in a terminal (any terminal — VS Code's integrated terminal works best).
+- macOS or Linux for precise per-session resolution. Windows users get the most-recently-updated session as a fallback.
 
 ## How it works
 
