@@ -24,13 +24,105 @@ function log(msg) {
   if (outputChannel) outputChannel.appendLine(`[${new Date().toISOString()}] ${msg}`);
 }
 
+// ---- Session display names (sessionId → markdown filename) ----
+//
+// Preview tab titles come from the filename, so responses are stored under a
+// human-readable name derived from the session: the `summary` in the
+// project's sessions-index.json when available, otherwise the first user
+// prompt, otherwise the session id. A name is assigned once per session and
+// never changed afterwards — renaming under an open preview tab breaks it.
+
+let sessionNames = null;
+
+function sessionNamesPath() {
+  return path.join(storageDir, 'sessions.json');
+}
+
+function loadSessionNames() {
+  if (!sessionNames) {
+    try {
+      sessionNames = JSON.parse(fs.readFileSync(sessionNamesPath(), 'utf8'));
+    } catch {
+      sessionNames = {};
+    }
+  }
+  return sessionNames;
+}
+
+function saveSessionNames() {
+  try {
+    fs.writeFileSync(sessionNamesPath(), JSON.stringify(sessionNames, null, 2));
+  } catch (err) {
+    log(`save session names failed: ${err.message}`);
+  }
+}
+
+function sanitizeTitle(raw) {
+  const cleaned = raw
+    .replace(/<[^>]*>/g, ' ') // markup-ish tags (e.g. <ide_selection>…)
+    .replace(/[\\/:*?"<>|]/g, ' ') // filename-unsafe characters
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\s]+|[.\s]+$/g, ''); // no hidden files, no Windows trailing dots
+  if (!cleaned) return null;
+  if (cleaned.length <= 50) return cleaned;
+  const cut = cleaned.slice(0, 50);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 25 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+function summaryFromIndex(transcriptPath, sessionId) {
+  const indexPath = path.join(path.dirname(transcriptPath), 'sessions-index.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+    const entry = (data.entries || []).find((e) => e && e.sessionId === sessionId);
+    if (entry && typeof entry.summary === 'string' && entry.summary.trim()) {
+      return entry.summary;
+    }
+  } catch {}
+  return null;
+}
+
+function firstUserPrompt(entries) {
+  for (const e of entries) {
+    if (e.type !== 'user') continue;
+    const c = e.message && e.message.content;
+    if (typeof c === 'string' && c.trim()) return c;
+    if (Array.isArray(c)) {
+      for (const b of c) {
+        if (b && b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
+          return b.text;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Returns the session's md path, or null if no name has been assigned yet.
 function mdPathForSession(sessionId) {
-  return path.join(storageDir, `${sessionId}.md`);
+  const names = loadSessionNames();
+  return names[sessionId] ? path.join(storageDir, names[sessionId]) : null;
+}
+
+function assignMdPath(sessionId, transcriptPath, entries) {
+  const existing = mdPathForSession(sessionId);
+  if (existing) return existing;
+  const title = summaryFromIndex(transcriptPath, sessionId) || firstUserPrompt(entries);
+  const base = (title && sanitizeTitle(title)) || sessionId;
+  let filename = `${base}.md`;
+  const names = loadSessionNames();
+  // Titles aren't unique across sessions — disambiguate with a short id.
+  if (Object.values(names).includes(filename)) {
+    filename = `${base} — ${sessionId.slice(0, 8)}.md`;
+  }
+  names[sessionId] = filename;
+  saveSessionNames();
+  return path.join(storageDir, filename);
 }
 
 // ---- Transcript → markdown extraction ----
 
-function extractLastResponse(transcriptPath) {
+function readTranscriptEntries(transcriptPath) {
   let content;
   try {
     content = fs.readFileSync(transcriptPath, 'utf8');
@@ -48,42 +140,69 @@ function extractLastResponse(transcriptPath) {
       // Partial / malformed line during streaming — skip.
     }
   }
+  return entries;
+}
 
-  // Walk backwards to find the latest "real" user turn — a string prompt, or
-  // array content with at least one block that isn't a tool_result.
-  let lastUserIdx = -1;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const e = entries[i];
-    if (e.type !== 'user') continue;
-    const c = e.message && e.message.content;
-    if (typeof c === 'string') { lastUserIdx = i; break; }
-    if (Array.isArray(c) && c.some((b) => b && b.type !== 'tool_result')) {
-      lastUserIdx = i;
-      break;
+// Splits the transcript at every "real" user turn — a string prompt, or
+// array content with at least one block that isn't a tool_result — and
+// returns the assistant text of each turn, oldest first. Sidechain entries
+// (subagents) are skipped.
+function extractResponses(entries) {
+  const responses = [];
+  let current = [];
+  for (const e of entries) {
+    if (e.isSidechain) continue;
+    if (e.type === 'user') {
+      const c = e.message && e.message.content;
+      const isRealUserTurn =
+        typeof c === 'string' ||
+        (Array.isArray(c) && c.some((b) => b && b.type !== 'tool_result'));
+      if (isRealUserTurn && current.length) {
+        responses.push(current.join('\n\n'));
+        current = [];
+      }
+      continue;
     }
-  }
-
-  const texts = [];
-  for (let i = lastUserIdx + 1; i < entries.length; i++) {
-    const e = entries[i];
     if (e.type !== 'assistant') continue;
     const content = e.message && e.message.content;
     if (!Array.isArray(content)) continue;
     for (const b of content) {
       if (b && b.type === 'text' && typeof b.text === 'string') {
-        texts.push(b.text);
+        current.push(b.text);
       }
     }
   }
-
-  return texts.length ? texts.join('\n\n') : null;
+  if (current.length) responses.push(current.join('\n\n'));
+  return responses;
 }
 
-function writeExtractedResponse(transcriptPath) {
-  const text = extractLastResponse(transcriptPath);
-  if (!text) return false;
+// ---- Response history navigation ----
+
+// offset 0 = latest response, 1 = one older, … (mirrors `/copy N` counting
+// from the end). Reset to 0 whenever the transcript changes.
+const responseOffsets = new Map();
+
+function writeResponseAtOffset(transcriptPath, offset) {
+  const entries = readTranscriptEntries(transcriptPath);
+  if (!entries) return false;
+  const responses = extractResponses(entries);
+  if (!responses.length) return false;
+
   const sessionId = path.basename(transcriptPath, '.jsonl');
-  const outPath = mdPathForSession(sessionId);
+  const clamped = Math.min(Math.max(offset, 0), responses.length - 1);
+  responseOffsets.set(sessionId, clamped);
+
+  const index = responses.length - 1 - clamped;
+  let text = responses[index];
+  // Indicator only while browsing history, so the latest response stays
+  // clean for copying.
+  if (clamped > 0) {
+    text =
+      `> *Response ${index + 1} of ${responses.length} — ` +
+      `\`Cmd/Ctrl+←\` older · \`Cmd/Ctrl+→\` newer*\n\n` + text;
+  }
+
+  const outPath = assignMdPath(sessionId, transcriptPath, entries);
   try {
     fs.writeFileSync(outPath, MD_PREFIX + text + '\n');
   } catch (err) {
@@ -94,6 +213,20 @@ function writeExtractedResponse(transcriptPath) {
   // workspace, so nudge it to re-render.
   vscode.commands.executeCommand('markdown.preview.refresh').then(undefined, () => {});
   return true;
+}
+
+// A new transcript change snaps the preview back to the latest response.
+function writeExtractedResponse(transcriptPath) {
+  return writeResponseAtOffset(transcriptPath, 0);
+}
+
+async function navigateResponse(delta) {
+  const sessionId = focusedPreviewSessionId || (await activeSessionId());
+  if (!sessionId) return;
+  const transcript = findTranscriptForSession(sessionId);
+  if (!transcript) return;
+  const current = responseOffsets.get(sessionId) || 0;
+  writeResponseAtOffset(transcript, current + delta);
 }
 
 function scheduleExtraction(transcriptPath) {
@@ -123,6 +256,17 @@ function pruneOldResponses() {
       if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full);
     } catch {}
   }
+
+  // Drop name-map entries whose markdown file is gone.
+  const names = loadSessionNames();
+  let changed = false;
+  for (const [sid, fname] of Object.entries(names)) {
+    if (!fs.existsSync(path.join(storageDir, fname))) {
+      delete names[sid];
+      changed = true;
+    }
+  }
+  if (changed) saveSessionNames();
 }
 
 function mostRecentMdPath() {
@@ -211,6 +355,37 @@ function findTranscriptForSession(sessionId) {
   return null;
 }
 
+// ---- Focused-preview tracking ----
+//
+// VS Code has no "is this markdown preview focused" context, but the active
+// tab is observable. When it is a markdown-preview webview whose label ends
+// with one of our session filenames, expose a context key so the navigation
+// keybindings only fire there, and remember the session for the commands.
+
+let focusedPreviewSessionId = null;
+
+function updatePreviewFocusContext() {
+  const group = vscode.window.tabGroups.activeTabGroup;
+  const tab = group && group.activeTab;
+  let sessionId = null;
+  if (
+    tab &&
+    tab.input instanceof vscode.TabInputWebview &&
+    /markdown/.test(tab.input.viewType)
+  ) {
+    for (const [sid, fname] of Object.entries(loadSessionNames())) {
+      if (tab.label.endsWith(fname)) {
+        sessionId = sid;
+        break;
+      }
+    }
+  }
+  focusedPreviewSessionId = sessionId;
+  vscode.commands
+    .executeCommand('setContext', 'claudeCodePreview.previewFocused', !!sessionId)
+    .then(undefined, () => {});
+}
+
 // ---- Preview target resolution ----
 //
 // Returns one of:
@@ -232,7 +407,7 @@ async function resolvePreview() {
     if (transcript) writeExtractedResponse(transcript);
 
     const mdPath = mdPathForSession(sessionId);
-    if (fs.existsSync(mdPath)) return { kind: 'file', path: mdPath };
+    if (mdPath && fs.existsSync(mdPath)) return { kind: 'file', path: mdPath };
     return { kind: 'empty', sessionId };
   }
 
@@ -295,8 +470,13 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('claudeCodePreview.open', () => openPreview(true)),
-    vscode.commands.registerCommand('claudeCodePreview.openCurrent', () => openPreview(false))
+    vscode.commands.registerCommand('claudeCodePreview.openCurrent', () => openPreview(false)),
+    vscode.commands.registerCommand('claudeCodePreview.olderResponse', () => navigateResponse(1)),
+    vscode.commands.registerCommand('claudeCodePreview.newerResponse', () => navigateResponse(-1)),
+    vscode.window.tabGroups.onDidChangeTabs(updatePreviewFocusContext),
+    vscode.window.tabGroups.onDidChangeTabGroups(updatePreviewFocusContext)
   );
+  updatePreviewFocusContext();
 }
 
 function deactivate() {

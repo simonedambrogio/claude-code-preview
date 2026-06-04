@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.3.5 — 2026-06-04
+
+- Human-readable preview tab titles: response files are named after the session (the `summary` from the project's `sessions-index.json` when available, otherwise the first user prompt) instead of the session UUID. Names are assigned once per session and never renamed mid-session.
+- Response history navigation: `Cmd+←` / `Cmd+→` (`Ctrl` on Windows/Linux) step through older/newer responses while the response preview is the focused tab — like `/copy N`, but visual. A history indicator shows `Response N of M`; the latest response stays indicator-free for clean copying. A new response snaps the preview back to the latest.
+- Skip sidechain (subagent) entries when extracting responses.
+
 ## 0.3.4 — 2026-06-04
 
 - Fix keybindings on Windows/Linux: `Ctrl+K V` and `Ctrl+Shift+V` (previously bound to `cmd`, which maps to the Win/Meta key outside macOS).

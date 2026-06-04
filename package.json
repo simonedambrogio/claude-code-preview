@@ -2,7 +2,7 @@
   "name": "claude-code-preview",
   "displayName": "Claude Code Preview",
   "description": "Render Claude Code responses with LaTeX math, code highlighting, and markdown formatting in VS Code's markdown preview.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "simonedambrogio",
   "author": {
     "name": "Simone D'Ambrogio"
@@ -45,6 +45,14 @@
       {
         "command": "claudeCodePreview.openCurrent",
         "title": "Claude Code Preview: Open Latest Response"
+      },
+      {
+        "command": "claudeCodePreview.olderResponse",
+        "title": "Claude Code Preview: Show Older Response"
+      },
+      {
+        "command": "claudeCodePreview.newerResponse",
+        "title": "Claude Code Preview: Show Newer Response"
       }
     ],
     "keybindings": [
@@ -59,6 +67,18 @@
         "key": "ctrl+shift+v",
         "mac": "cmd+shift+v",
         "when": "terminalFocus"
+      },
+      {
+        "command": "claudeCodePreview.olderResponse",
+        "key": "ctrl+left",
+        "mac": "cmd+left",
+        "when": "claudeCodePreview.previewFocused"
+      },
+      {
+        "command": "claudeCodePreview.newerResponse",
+        "key": "ctrl+right",
+        "mac": "cmd+right",
+        "when": "claudeCodePreview.previewFocused"
       }
     ]
   }

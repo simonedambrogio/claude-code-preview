@@ -24,8 +24,10 @@ That's it. The preview opens beside the terminal and auto-refreshes after every 
 | --- | --- | --- |
 | `Cmd+K V` | `Ctrl+K V` | **Open Latest Response to the Side** |
 | `Cmd+Shift+V` | `Ctrl+Shift+V` | **Open Latest Response** (current pane) |
+| `Cmd+←` | `Ctrl+←` | **Show Older Response** (when the preview is focused) |
+| `Cmd+→` | `Ctrl+→` | **Show Newer Response** (when the preview is focused) |
 
-Both shortcuts are active when a terminal is focused, mirroring VS Code's built-in markdown preview keys. The commands are also available from the Command Palette.
+The open shortcuts are active when a terminal is focused, mirroring VS Code's built-in markdown preview keys; the navigation shortcuts only when the response preview is the focused tab. All commands are also available from the Command Palette.
 
 ## Features
 
@@ -33,6 +35,8 @@ Both shortcuts are active when a terminal is focused, mirroring VS Code's built-
 - **Math rendering.** Inline `$...$` and display `$$...$$` LaTeX expressions render via VS Code's built-in KaTeX support.
 - **Auto-refresh.** The preview updates itself after every new response — open it once and keep chatting.
 - **Per-session previews.** The extension finds *which* session belongs to the focused terminal by walking its process tree. Parallel sessions in the same project show their own previews — no collisions.
+- **Response history.** Step back through every response of the session with `Cmd+←` / `Cmd+→` while the preview is focused — like `/copy N`, but visual. A new response snaps the preview back to the latest.
+- **Readable tab titles.** Previews are named after the session (its summary, or the first prompt) instead of a UUID.
 - **Easy copying.** Select rendered text from the preview instead of fighting line-wrapped terminal output.
 
 ## Requirements
