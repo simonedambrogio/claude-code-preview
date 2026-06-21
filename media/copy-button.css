@@ -1,0 +1,40 @@
+/* Copy button for code blocks in Claude Code Preview responses.
+   Injected via package.json markdown.previewStyles. Themed with VS Code
+   tokens so it matches light and dark. */
+
+.ccp-has-copy {
+  position: relative;
+}
+
+.ccp-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 18px;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+}
+
+/* Reveal on hover/focus so the button doesn't clutter the reading view. */
+.ccp-has-copy:hover .ccp-copy-btn,
+.ccp-copy-btn:focus {
+  opacity: 1;
+}
+
+.ccp-copy-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+.ccp-copy-btn.ccp-copied {
+  opacity: 1;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}

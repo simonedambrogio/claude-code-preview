@@ -2,3 +2,7 @@ node_modules/
 *.vsix
 .DS_Store
 logo/
+
+# Demo recording sources / scratch (only assets/demo.gif is tracked)
+assets/*.mov
+assets/demo-old.gif

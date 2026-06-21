@@ -37,6 +37,7 @@ The open shortcuts are active when a terminal is focused, mirroring VS Code's bu
 - **Per-session previews.** The extension finds *which* session belongs to the focused terminal by walking its process tree. Parallel sessions in the same project show their own previews — no collisions.
 - **Response history.** Step back through every response of the session with `Cmd+←` / `Cmd+→` while the preview is focused — like `/copy N`, but visual. A new response snaps the preview back to the latest.
 - **Readable tab titles.** Previews are named after the session (its summary, or the first prompt) instead of a UUID.
+- **Copy code blocks.** Hover any fenced code block in the preview for a one-click **Copy** button.
 - **Easy copying.** Select rendered text from the preview instead of fighting line-wrapped terminal output.
 
 ## Requirements

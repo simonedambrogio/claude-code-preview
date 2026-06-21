@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.3.6 — 2026-06-21
+
+- Copy button on code blocks: hover a fenced code block in a response preview to reveal a one-click **Copy** button. Self-scoped to Claude Code Preview responses (detected via the marker comment), so other markdown previews are unaffected.
+
 ## 0.3.5 — 2026-06-04
 
 - Human-readable preview tab titles: response files are named after the session (the `summary` from the project's `sessions-index.json` when available, otherwise the first user prompt) instead of the session UUID. Names are assigned once per session and never renamed mid-session.

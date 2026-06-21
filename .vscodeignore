@@ -10,3 +10,8 @@ node_modules/**
 .prettierrc*
 logo/**
 
+# Demo media is hosted on GitHub (vsce rewrites the README image path to a
+# repository URL), so none of assets/ needs to ship in the package.
+assets/**
+**/*.mov
+
